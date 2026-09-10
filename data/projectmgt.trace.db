@@ -1,0 +1,6 @@
+2026-08-27 19:35:49.161704-03:00 jdbc[13]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "PROJECT" not found (this database is empty); SQL statement:
+select * from project [42104-240]
+2026-08-27 19:36:21.137015-03:00 jdbc[13]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "PROJECT" not found (this database is empty); SQL statement:
+select * from project [42104-240]

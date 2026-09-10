@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@Data	
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -21,8 +21,7 @@ public class Task {
     // primitivo. O default "false" continua garantido no TaskService.create(), não aqui.
     private Boolean done;
 
-	public Task(Long id) {
-		this.id = id;
-	}
-    
+    public Task(Long id) {
+        this.id = id;
+    }
 }
