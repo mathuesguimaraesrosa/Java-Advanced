@@ -1,46 +1,19 @@
 package br.com.fiap.t2tdsps.projectmgt.service;
 
 import br.com.fiap.t2tdsps.projectmgt.model.Milestone;
-import br.com.fiap.t2tdsps.projectmgt.repository.MilestoneRepository;
-import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
 
-import java.util.List;
-import java.util.Optional;
+public interface MilestoneService {
 
-@Service
-public class MilestoneService {
+    Page<Milestone> findAll(Integer page, Integer size);
 
-    private final MilestoneRepository milestoneRepository;
+    Page<Milestone> findByProjectId(Long projectId, Integer page, Integer size);
 
-    public MilestoneService(MilestoneRepository milestoneRepository) {
-        this.milestoneRepository = milestoneRepository;
-    }
+    Milestone findById(Long id);
 
-    public List<Milestone> findAll() {
-        return milestoneRepository.findAll();
-    }
+    Milestone create(Milestone milestone);
 
-    public Optional<Milestone> findById(Long id) {
-        return milestoneRepository.findById(id);
-    }
+    Milestone update(Long id, Milestone updated);
 
-    public Milestone create(Milestone milestone) {
-        milestone.setId(null);
-        return milestoneRepository.save(milestone);
-    }
-
-    public Optional<Milestone> update(Long id, Milestone updated) {
-        return milestoneRepository.findById(id).map(existing -> {
-            updated.setId(id);
-            return milestoneRepository.save(updated);
-        });
-    }
-
-    public boolean delete(Long id) {
-        if (!milestoneRepository.existsById(id)) {
-            return false;
-        }
-        milestoneRepository.deleteById(id);
-        return true;
-    }
+    void delete(Long id);
 }

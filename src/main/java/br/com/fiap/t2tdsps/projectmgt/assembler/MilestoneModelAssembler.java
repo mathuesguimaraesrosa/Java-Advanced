@@ -19,7 +19,9 @@ public class MilestoneModelAssembler implements RepresentationModelAssembler<Mil
 
         EntityModel<MilestoneResponse> model = EntityModel.of(MilestoneMapper.toResponse(milestone));
         model.add(linkTo(methodOn(MilestoneController.class).findById(milestone.getId())).withSelfRel());
-        model.add(linkTo(methodOn(MilestoneController.class).findAll()).withRel("findAll"));
+        // findAll saiu do link (Semana 3, Exercício 2): agora é paginado (PageResponse), não faz mais
+        // parte da navegação HATEOAS - methodOn exige os mesmos parâmetros do método real, e não faz
+        // sentido fixar page/sizePage aqui.
         model.add(linkTo(methodOn(MilestoneController.class).delete(milestone.getId())).withRel("delete"));
 
         return model;

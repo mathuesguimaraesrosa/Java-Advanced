@@ -1,16 +1,13 @@
 package br.com.fiap.t2tdsps.projectmgt.model;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Getter
@@ -22,11 +19,16 @@ public class Milestone {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private Long projectId;
+    @ManyToOne(fetch =  FetchType.LAZY)
+    @JoinColumn(name = "project_id")
+    private Project project;
 
     private String name;
 
     private LocalDate dueDate;
+
+    @OneToMany(mappedBy = "milestone", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Task> tasks = new ArrayList<>();
 
     @Enumerated(EnumType.STRING) // grava "PENDENTE", não o índice 0/1/2 - mesma regra do Project
     private MilestoneStatus status;

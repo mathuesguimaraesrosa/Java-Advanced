@@ -1,15 +1,21 @@
 package br.com.fiap.t2tdsps.projectmgt.dto;
 
+import br.com.fiap.t2tdsps.projectmgt.validation.MaxYearsInFuture;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
 import java.time.LocalDate;
 
-public record MilestoneRequest(Long projectId, String name, LocalDate dueDate) {
+public record MilestoneRequest(
+        @NotNull(message = "project é obrigatório")
+        ProjectRequest project,
 
-    public MilestoneRequest {
-        if (projectId == null) {
-            throw new IllegalArgumentException("projectId é obrigatório");
-        }
-        if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("name é obrigatório");
-        }
-    }
+        @NotBlank(message = "name é obrigatório")
+        @Size(max = 150, message = "name deve ter no máximo 150 caracteres")
+        String name,
+
+        @MaxYearsInFuture(value = 2, message = "dueDate não pode estar a mais de 2 anos no futuro")
+        LocalDate dueDate
+) {
 }

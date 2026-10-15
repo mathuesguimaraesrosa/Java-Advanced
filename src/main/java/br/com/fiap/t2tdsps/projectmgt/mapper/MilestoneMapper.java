@@ -12,7 +12,7 @@ public final class MilestoneMapper {
     public static MilestoneResponse toResponse(Milestone milestone) {
         return new MilestoneResponse(
                 milestone.getId(),
-                milestone.getProjectId(),
+                milestone.getProject().getId(),
                 milestone.getName(),
                 milestone.getDueDate(),
                 milestone.getStatus()
