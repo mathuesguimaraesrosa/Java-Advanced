@@ -11,7 +11,7 @@
 
 ### 1.1 O papel da camada Service
 
-Até aqui o `ProjectService` fez pouco além de repassar chamadas pro `ProjectRepository` — e tudo bem, isso é normal
+Até aqui o `ProjectServiceImpl` fez pouco além de repassar chamadas pro `ProjectRepository` — e tudo bem, isso é normal
 numa API simples. Mas ele já tem duas responsabilidades que **não são do controller nem do repository**:
 
 1. **Decidir o que "não existe" significa.** `GET /api/projects/999` deve virar `404`. Até a Semana 2, cada método do
@@ -467,6 +467,7 @@ public class ProjectService {
 ```
 
 `controller/ProjectController.java`
+
 ```java
 package br.com.fiap.t2tdsps.projectmgt.controller;
 
@@ -476,7 +477,7 @@ import br.com.fiap.t2tdsps.projectmgt.dto.ProjectResponse;
 import br.com.fiap.t2tdsps.projectmgt.mapper.ProjectMapper;
 import br.com.fiap.t2tdsps.projectmgt.model.Project;
 import br.com.fiap.t2tdsps.projectmgt.model.ProjectStatus;
-import br.com.fiap.t2tdsps.projectmgt.service.ProjectService;
+import br.com.fiap.t2tdsps.projectmgt.service.ProjectServiceImpl;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
@@ -488,15 +489,15 @@ import java.net.URI;
 @RequestMapping("/api/projects")
 public class ProjectController {
 
-    private final ProjectService projectService;
+    private final ProjectServiceImpl projectService;
 
-    public ProjectController(ProjectService projectService) {
+    public ProjectController(ProjectServiceImpl projectService) {
         this.projectService = projectService;
     }
 
     @GetMapping
     public PageResponse<ProjectResponse> getAllProjects(@RequestParam(required = false) ProjectStatus status,
-                                                          Pageable pageable) {
+                                                        Pageable pageable) {
         Page<Project> page = status != null
                 ? projectService.findByStatus(status, pageable)
                 : projectService.findAll(pageable);
@@ -576,7 +577,7 @@ lançando `ResourceNotFoundException`.
 
 ### Exercício 2 — Paginação em `Milestone`
 
-Aplicar paginação em `GET /api/milestones`, incluindo filtro opcional por `projectId`.
+Aplicar paginação em `GET /api/milestones`, incluindo filtro opcional por `project`.
 
 **Decisão de escopo (leia antes de implementar):** combinar `Page<T>` com HATEOAS "de verdade" usa um mecanismo à
 parte do Spring HATEOAS (`PagedResourcesAssembler`), fora do escopo desta semana. Pra não misturar os dois assuntos,
@@ -586,7 +587,7 @@ só no `findById`** (que mantém `EntityModel<MilestoneResponse>`).
 **Critérios de aceite:**
 - [ ] `MilestoneRepository` ganha `Page<Milestone> findByProjectId(Long projectId, Pageable pageable)`.
 - [ ] `MilestoneService` ganha métodos paginados equivalentes (`findAll(Pageable)`, `findByProjectId(Long, Pageable)`),
-      no mesmo padrão do `ProjectService`.
+      no mesmo padrão do `ProjectServiceImpl`.
 - [ ] `GET /api/milestones` aceita `page`/`size`/`sort` e, opcionalmente, `?projectId=`, devolvendo
       `PageResponse<MilestoneResponse>`.
 - [ ] `GET /api/milestones/{id}` continua devolvendo `EntityModel<MilestoneResponse>` com `_links` (sem mudança).

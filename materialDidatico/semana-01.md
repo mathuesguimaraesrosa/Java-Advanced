@@ -430,12 +430,13 @@ public class ProjectService {
 ```
 
 `controller/ProjectController.java` — já com HATEOAS (`_links`) nos endpoints de leitura:
+
 ```java
 package br.com.fiap.t2tdsps.projectmgt.controller;
 
 import br.com.fiap.t2tdsps.projectmgt.assembler.ProjectModelAssembler;
 import br.com.fiap.t2tdsps.projectmgt.model.Project;
-import br.com.fiap.t2tdsps.projectmgt.service.ProjectService;
+import br.com.fiap.t2tdsps.projectmgt.service.ProjectServiceImpl;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.http.ResponseEntity;
@@ -457,10 +458,10 @@ import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
 @RequestMapping("/api/projects")
 public class ProjectController {
 
-    private final ProjectService projectService;
+    private final ProjectServiceImpl projectService;
     private final ProjectModelAssembler assembler;
 
-    public ProjectController(ProjectService projectService, ProjectModelAssembler assembler) {
+    public ProjectController(ProjectServiceImpl projectService, ProjectModelAssembler assembler) {
         this.projectService = projectService;
         this.assembler = assembler;
     }
@@ -572,7 +573,7 @@ Pense: por que o #2 devolve `201` e não `200`? Por que o #6 (`PUT`) é consider
 
 Replicar, para o recurso `Milestone`, exatamente o padrão `model → repository → service → controller` usado em `Project` (seção 2) — **já usando Lombok desde o início**.
 
-Campos de `Milestone`: `id` (Long), `projectId` (Long — referência simples ao id do `Project`, sem relacionamento JPA ainda), `name` (String), `dueDate` (LocalDate), `status` (enum `MilestoneStatus` com `PENDENTE`, `CONCLUIDA`, `ATRASADA`).
+Campos de `Milestone`: `id` (Long), `project` (Long — referência simples ao id do `Project`, sem relacionamento JPA ainda), `name` (String), `dueDate` (LocalDate), `status` (enum `MilestoneStatus` com `PENDENTE`, `CONCLUIDA`, `ATRASADA`).
 
 **Critérios de aceite:**
 - [ ] `MilestoneStatus` criado com os 3 valores acima.
@@ -609,6 +610,6 @@ Aplicar em `Milestone` o mesmo padrão de *assembler* usado em `Project` (seçã
 
 **Critérios de aceite:**
 - [ ] Criada `MilestoneModelAssembler` implementando `RepresentationModelAssembler<Milestone, EntityModel<Milestone>>`.
-- [ ] `GET /api/milestones/{id}` retorna corpo com `_links` contendo, no mínimo: `self`, `project` (apontando para `/api/projects/{projectId}`, usando o `projectId` da própria milestone) e `delete`.
+- [ ] `GET /api/milestones/{id}` retorna corpo com `_links` contendo, no mínimo: `self`, `project` (apontando para `/api/projects/{projectId}`, usando o `project` da própria milestone) e `delete`.
 - [ ] `GET /api/milestones` retorna `CollectionModel` com link `self`.
 - [ ] Testado no Postman confirmando visualmente o campo `_links` no corpo das duas respostas acima.

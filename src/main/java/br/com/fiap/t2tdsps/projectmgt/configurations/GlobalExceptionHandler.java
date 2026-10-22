@@ -3,6 +3,7 @@ package br.com.fiap.t2tdsps.projectmgt.configurations;
 import br.com.fiap.t2tdsps.projectmgt.dto.ErrorCustomResponse;
 import br.com.fiap.t2tdsps.projectmgt.dto.ErrorFieldCustom;
 import br.com.fiap.t2tdsps.projectmgt.dto.ValidationErrorResponse;
+import br.com.fiap.t2tdsps.projectmgt.exceptions.EmailAlreadyRegisteredException;
 import br.com.fiap.t2tdsps.projectmgt.exceptions.InvalidStatusTransitionException;
 import br.com.fiap.t2tdsps.projectmgt.exceptions.MilestoneAlreadyCompletedException;
 import br.com.fiap.t2tdsps.projectmgt.exceptions.ResourceNotFoundException;
@@ -10,6 +11,8 @@ import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -36,6 +39,25 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MilestoneAlreadyCompletedException.class)
     public ResponseEntity<ErrorCustomResponse> handleMilestoneAlreadyCompleted(MilestoneAlreadyCompletedException ex) {
         return build(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(EmailAlreadyRegisteredException.class)
+    public ResponseEntity<ErrorCustomResponse> handleEmailAlreadyRegistered(EmailAlreadyRegisteredException ex) {
+        return build(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    // 401: credenciais erradas no login (BadCredentialsException é uma AuthenticationException).
+    // Mensagem GENÉRICA de propósito: não revela se o erro foi no email ou na senha.
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorCustomResponse> handleAuthentication(AuthenticationException ex) {
+        return build(HttpStatus.UNAUTHORIZED, "Credenciais inválidas");
+    }
+
+    // 403: usuário autenticado, mas sem permissão. Vem de @PreAuthorize (AuthorizationDeniedException) ou da regra
+    // de posse no service. SEM este handler, o catch-all Exception.class abaixo transformaria tudo em 500.
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorCustomResponse> handleAccessDenied(AccessDeniedException ex) {
+        return build(HttpStatus.FORBIDDEN, "Você não tem permissão para executar esta ação");
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

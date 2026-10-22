@@ -12,7 +12,7 @@
 
 Na Semana 1 vimos `controller → service → repository`. Hoje essa separação paga a conta: vamos trocar a
 **implementação** do repositório (de `HashMap` em memória para um banco de verdade via JPA) sem tocar em uma linha do
-`ProjectService`. Isso só é possível porque o service depende de uma **abstração** (os métodos `findAll`/`findById`/
+`ProjectServiceImpl`. Isso só é possível porque o service depende de uma **abstração** (os métodos `findAll`/`findById`/
 `save`/...), não de como os dados são guardados.
 
 Também vale reforçar um ponto: manter regra de negócio **dentro da entidade** (como o `setStatus()` do `Project`, que
@@ -187,7 +187,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
 Só isso. O Spring Data JPA gera a implementação em tempo de execução (um *proxy*). Os métodos herdados —
 `findAll()`, `findById(Long)`, `save(entity)`, `deleteById(Long)`, `existsById(Long)`, `count()` — são **os mesmos
 nomes** que já usávamos no `ProjectRepository` em memória da Semana 1. Por isso a migração é praticamente transparente
-para o `ProjectService`.
+para o `ProjectServiceImpl`.
 
 **Derived query methods**: métodos automáticos, gerados a partir do próprio nome — o Spring Data interpreta e monta a
 consulta sozinho:
@@ -214,7 +214,7 @@ public class ProjectService {
 }
 ```
 
-O `ProjectService` nunca soube (nem precisa saber) que a implementação trocou de `HashMap` para banco — ele sempre
+O `ProjectServiceImpl` nunca soube (nem precisa saber) que a implementação trocou de `HashMap` para banco — ele sempre
 dependeu da abstração `ProjectRepository`. DI + programar contra interface é o que torna essa troca indolor.
 
 ### 1.10 Configuração do H2
@@ -465,6 +465,7 @@ public final class ProjectMapper {
 
 `controller/ProjectController.java` — `GET` e `POST` já usando os DTOs e o Mapper (`PUT`/`DELETE` ficam para o
 Exercício 1):
+
 ```java
 package br.com.fiap.t2tdsps.projectmgt.controller;
 
@@ -473,7 +474,7 @@ import br.com.fiap.t2tdsps.projectmgt.dto.ProjectResponse;
 import br.com.fiap.t2tdsps.projectmgt.mapper.ProjectMapper;
 import br.com.fiap.t2tdsps.projectmgt.model.Project;
 import br.com.fiap.t2tdsps.projectmgt.model.ProjectStatus;
-import br.com.fiap.t2tdsps.projectmgt.service.ProjectService;
+import br.com.fiap.t2tdsps.projectmgt.service.ProjectServiceImpl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -484,9 +485,9 @@ import java.util.List;
 @RequestMapping("/api/projects")
 public class ProjectController {
 
-    private final ProjectService projectService;
+    private final ProjectServiceImpl projectService;
 
-    public ProjectController(ProjectService projectService) {
+    public ProjectController(ProjectServiceImpl projectService) {
         this.projectService = projectService;
     }
 
@@ -568,7 +569,7 @@ e Mapper desta aula.
 Criar o recurso `Milestone` inteiramente com o padrão de hoje (entidade JPA + `JpaRepository` + DTOs `record` +
 Mapper), seguindo o mesmo processo aplicado a `Project` nesta aula (seção 2).
 
-Campos de `Milestone`: `id` (Long, gerado pelo banco), `projectId` (Long), `name` (String), `dueDate` (LocalDate),
+Campos de `Milestone`: `id` (Long, gerado pelo banco), `project` (Long), `name` (String), `dueDate` (LocalDate),
 `status` (enum `MilestoneStatus`: `PENDENTE`, `CONCLUIDA`, `ATRASADA` — todo `Milestone` nasce `PENDENTE`).
 
 **Critérios de aceite:**
@@ -577,7 +578,7 @@ Campos de `Milestone`: `id` (Long, gerado pelo banco), `projectId` (Long), `name
 - [ ] `MilestoneRepository extends JpaRepository<Milestone, Long>` (sem implementação manual).
 - [ ] `MilestoneRequest` (record, sem `id` nem `status`) e `MilestoneResponse` (record, com todos os campos) criados
       em `dto/`.
-- [ ] `MilestoneRequest` valida no construtor compacto: `projectId` obrigatório, `name` obrigatório/não vazio.
+- [ ] `MilestoneRequest` valida no construtor compacto: `project` obrigatório, `name` obrigatório/não vazio.
 - [ ] `MilestoneMapper` criado em `mapper/`, com `toResponse(Milestone)` retornando `MilestoneResponse` — seguindo o
       mesmo padrão do `ProjectMapper` (só traduz entidade → DTO de saída).
 - [ ] `MilestoneController` em `/api/milestones` com `GET` (lista e por id), `POST` (sempre cria com `status =
@@ -593,7 +594,7 @@ Adicionar a possibilidade de filtrar projetos por status via query string: `GET 
 **Critérios de aceite:**
 - [ ] `ProjectRepository` ganha o método `List<Project> findByStatus(ProjectStatus status);` — **sem** nenhuma
       implementação escrita (é um *derived query method*, o Spring Data monta a query pelo nome).
-- [ ] `ProjectService` ganha um método que delega para esse novo método do repository.
+- [ ] `ProjectServiceImpl` ganha um método que delega para esse novo método do repository.
 - [ ] `GET /api/projects` (sem query param) continua devolvendo todos os projetos, como antes.
 - [ ] `GET /api/projects?status=EM_ANDAMENTO` devolve **só** os projetos com esse status.
 - [ ] `GET /api/projects?status=XYZ` (valor inválido, fora do enum) → `400 Bad Request` (comportamento padrão do
@@ -612,7 +613,7 @@ Nos dois casos, uma informação é perdida no momento exato em que algo importa
 **Perguntas de reflexão (responda antes de programar):**
 1. Um cliente reclama que um projeto "sumiu" e ele tem certeza que existia. Com o `DELETE` de hoje, dá pra confirmar
    que ele foi apagado, quando, e o que tinha nele? Por quê?
-2. Uma `Milestone` guarda um `projectId`. Se o `Project` correspondente for apagado de verdade do banco, o que
+2. Uma `Milestone` guarda um `project`. Se o `Project` correspondente for apagado de verdade do banco, o que
    acontece com essa referência? Isso é um problema?
 3. Um gerente pede um relatório: "quanto tempo, em média, um projeto fica em `PLANEJADO` antes de virar
    `EM_ANDAMENTO`?". Com o código de hoje, essa informação existe em algum lugar?

@@ -1,0 +1,745 @@
+{
+  "info": {
+    "_postman_id": "a3f0c9e2-5b1a-4d7e-9c2f-projectmgt-semana03",
+    "name": "ProjectMGT - Semana 3",
+    "description": "Coleção de testes da Semana 3 (CRUD completo, paginação e tratamento de exceções) do curso ProjectMGT.\n\nIMPORTANTE: esta coleção testa o COMPORTAMENTO-ALVO da Semana 3, descrito em .planoAula/semana-03.md e materialDidatico/semana-03.md - ou seja, assume que o Service já usa getById() lançando exceções, que o controller já devolve PageResponse na listagem, e que o GlobalExceptionHandler já está implementado.\n\nSe você rodar esta coleção ANTES de implementar o conteúdo da Semana 3 (ainda só temos os pré-requisitos da Semana 2 no código), os testes de paginação (`content`/`totalElements`) e os testes de corpo de erro (`ErrorResponse` em 400/404/409) vão falhar - o `GET /api/projects` ainda devolve uma lista simples, e erros ainda caem no comportamento padrão do Spring (404 sem corpo, 500 genérico pra validação).\n\nOrdem sugerida de execução (Collection Runner): rode a pasta \"Project\" de cima pra baixo (ela encadeia `projectId` entre as requests), depois \"Milestone\".",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080", "type": "string" },
+    { "key": "projectId", "value": "", "type": "string" },
+    { "key": "milestoneId", "value": "", "type": "string" },
+    { "key": "nonExistentId", "value": "999999", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Project",
+      "item": [
+        {
+          "name": "Criar projeto",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Portal do cliente\",\n  \"description\": \"Novo portal self-service\",\n  \"startDate\": \"2026-02-01\",\n  \"endDate\": \"2026-08-30\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects"]
+            },
+            "description": "POST /api/projects - cria um projeto com ProjectRequest (sem status - a entidade força PLANEJADO). Guarda o id criado em {{projectId}} pra reusar nas próximas requests."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201 Created\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"header Location presente\", () => pm.response.to.have.header(\"Location\"));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"status inicial é PLANEJADO\", () => pm.expect(json.status).to.eql(\"PLANEJADO\"));",
+                  "pm.test(\"corpo é ProjectResponse (sem campos de implementação JPA)\", () => {",
+                  "    pm.expect(json).to.have.all.keys(\"id\", \"name\", \"description\", \"status\", \"startDate\", \"endDate\");",
+                  "});",
+                  "pm.collectionVariables.set(\"projectId\", json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Criar projeto - name em branco (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"sem nome\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-02-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects"]
+            },
+            "description": "O construtor compacto de ProjectRequest lança IllegalArgumentException, embrulhada como HttpMessageNotReadableException pelo Jackson/Spring - o GlobalExceptionHandler (Semana 3) converte isso em 400 com ErrorResponse."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 Bad Request\", () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"corpo no formato ErrorResponse\", () => {",
+                  "    pm.expect(json).to.have.property(\"status\", 400);",
+                  "    pm.expect(json).to.have.property(\"error\");",
+                  "    pm.expect(json).to.have.property(\"message\");",
+                  "    pm.expect(json).to.have.property(\"timestamp\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Criar projeto - endDate antes de startDate (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Projeto com datas invertidas\",\n  \"description\": \"teste\",\n  \"startDate\": \"2026-06-01\",\n  \"endDate\": \"2026-01-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects"]
+            },
+            "description": "Mesma validação do construtor compacto de ProjectRequest, agora pela regra endDate < startDate."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 Bad Request\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar projetos (paginado)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects?page=0&size=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "5" }
+              ]
+            },
+            "description": "GET /api/projects?page=0&size=5 - resposta no formato PageResponse<ProjectResponse> (seção 1.5 da Semana 3)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"corpo no formato PageResponse\", () => {",
+                  "    pm.expect(json).to.have.property(\"content\");",
+                  "    pm.expect(json).to.have.property(\"page\", 0);",
+                  "    pm.expect(json).to.have.property(\"size\");",
+                  "    pm.expect(json).to.have.property(\"totalElements\");",
+                  "    pm.expect(json).to.have.property(\"totalPages\");",
+                  "    pm.expect(json).to.have.property(\"last\");",
+                  "    pm.expect(json.content).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar projetos (paginado + ordenado)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects?page=0&size=5&sort=name,asc",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "5" },
+                { "key": "sort", "value": "name,asc" }
+              ]
+            },
+            "description": "Mesma listagem, agora com sort - confirma que o Spring resolveu Pageable a partir da query string sem parsing manual."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "const names = json.content.map(p => p.name);",
+                  "const sorted = [...names].sort((a, b) => a.localeCompare(b));",
+                  "pm.test(\"conteúdo ordenado por name asc\", () => pm.expect(names).to.eql(sorted));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar projetos (filtro por status + paginação)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects?status=PLANEJADO&page=0&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects"],
+              "query": [
+                { "key": "status", "value": "PLANEJADO" },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" }
+              ]
+            },
+            "description": "Combina o filtro por status (Exercício 3 da Semana 2, estendido pra Pageable na Semana 3) com paginação."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"todo item do content tem status PLANEJADO\", () => {",
+                  "    json.content.forEach(p => pm.expect(p.status).to.eql(\"PLANEJADO\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar projetos - status inválido (400)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects?status=FINALIZADO",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects"],
+              "query": [{ "key": "status", "value": "FINALIZADO" }]
+            },
+            "description": "FINALIZADO não existe no enum ProjectStatus - MethodArgumentTypeMismatchException, mapeada pelo GlobalExceptionHandler pra 400 com ErrorResponse (sem o handler, o Spring já devolveria 400 sozinho, mas com um corpo diferente do nosso padrão)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 Bad Request\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Buscar projeto por id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/{{projectId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects", "{{projectId}}"]
+            },
+            "description": "GET /api/projects/{id} - usa o id capturado em \"Criar projeto\"."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"id bate com o projeto criado\", () => pm.expect(String(json.id)).to.eql(pm.collectionVariables.get(\"projectId\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Buscar projeto por id - inexistente (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/{{nonExistentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects", "{{nonExistentId}}"]
+            },
+            "description": "getById() lança ResourceNotFoundException; GlobalExceptionHandler converte pra 404 com ErrorResponse (seção 1.6/1.9 da Semana 3)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404 Not Found\", () => pm.response.to.have.status(404));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"corpo no formato ErrorResponse\", () => {",
+                  "    pm.expect(json).to.have.property(\"status\", 404);",
+                  "    pm.expect(json.message).to.include(\"Project\");",
+                  "    pm.expect(json.message).to.include(pm.collectionVariables.get(\"nonExistentId\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Atualizar projeto",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Portal do cliente v2\",\n  \"description\": \"Escopo revisado\",\n  \"startDate\": \"2026-02-15\",\n  \"endDate\": \"2026-09-30\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/{{projectId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects", "{{projectId}}"]
+            },
+            "description": "PUT não mexe em status (decisão da Semana 2/3, seção 1.3) - confere que o status continua PLANEJADO depois do update."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"name atualizado\", () => pm.expect(json.name).to.eql(\"Portal do cliente v2\"));",
+                  "pm.test(\"status preservado (PUT não mexe em status)\", () => pm.expect(json.status).to.eql(\"PLANEJADO\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Atualizar projeto - inexistente (404)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Não importa\",\n  \"description\": \"Não importa\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-02-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/{{nonExistentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects", "{{nonExistentId}}"]
+            },
+            "description": "getById() lança ResourceNotFoundException antes de qualquer tentativa de salvar."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404 Not Found\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Remover projeto - inexistente (404)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/{{nonExistentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects", "{{nonExistentId}}"]
+            },
+            "description": "Rodada ANTES da remoção de verdade, de propósito - confirma 404 num id que nunca existiu."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404 Not Found\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Remover projeto",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/{{projectId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects", "{{projectId}}"]
+            },
+            "description": "Última request da pasta - deixe por último no Runner, senão as requests seguintes de Milestone perdem o projectId válido."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 204 No Content\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Milestone",
+      "item": [
+        {
+          "name": "Criar projeto (para as milestones)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Projeto para milestones\",\n  \"description\": \"Usado só pra popular projectId nesta pasta\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-12-31\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects"]
+            },
+            "description": "A pasta Project já deletou o projeto dela no final - esta request cria um novo, só pra dar um projectId válido pras milestones desta pasta."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201 Created\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set(\"projectId\", json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Criar milestone",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{projectId}},\n  \"name\": \"Entrega da fase 1\",\n  \"dueDate\": \"2026-03-15\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/milestones",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "milestones"]
+            },
+            "description": "POST /api/milestones - status inicial forçado como PENDENTE pelo controller, igual ao PLANEJADO do Project."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201 Created\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"status inicial é PENDENTE\", () => pm.expect(json.status).to.eql(\"PENDENTE\"));",
+                  "pm.collectionVariables.set(\"milestoneId\", json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Buscar milestone por id (HATEOAS)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/milestones/{{milestoneId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "milestones", "{{milestoneId}}"]
+            },
+            "description": "findById continua com HATEOAS (EntityModel<MilestoneResponse>) mesmo depois do Exercício 2 da Semana 3 tirar o HATEOAS do findAll."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"corpo tem _links\", () => pm.expect(json).to.have.property(\"_links\"));",
+                  "pm.test(\"_links tem self\", () => pm.expect(json._links).to.have.property(\"self\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Buscar milestone por id - inexistente (404) [Exercício 1]",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/milestones/{{nonExistentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "milestones", "{{nonExistentId}}"]
+            },
+            "description": "Só passa depois do Exercício 1 da Semana 3 (MilestoneService.getById lançando ResourceNotFoundException)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404 Not Found\", () => pm.response.to.have.status(404));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"corpo no formato ErrorResponse\", () => pm.expect(json).to.have.property(\"status\", 404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar milestones (paginado) [Exercício 2]",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/milestones?page=0&size=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "milestones"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "5" }
+              ]
+            },
+            "description": "Só passa depois do Exercício 2 - findAll troca CollectionModel por PageResponse<MilestoneResponse>."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"corpo no formato PageResponse (sem _links)\", () => {",
+                  "    pm.expect(json).to.have.property(\"content\");",
+                  "    pm.expect(json).to.have.property(\"totalElements\");",
+                  "    pm.expect(json).to.not.have.property(\"_links\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar milestones por projectId (paginado) [Exercício 2]",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/milestones?projectId={{projectId}}&page=0&size=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "milestones"],
+              "query": [
+                { "key": "projectId", "value": "{{projectId}}" },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "5" }
+              ]
+            },
+            "description": "MilestoneRepository.findByProjectId(Long, Pageable) - Exercício 2."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"todo item do content tem o projectId filtrado\", () => {",
+                  "    json.content.forEach(m => pm.expect(String(m.projectId)).to.eql(pm.collectionVariables.get(\"projectId\")));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Atualizar milestone",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{projectId}},\n  \"name\": \"Entrega da fase 1 - revisada\",\n  \"dueDate\": \"2026-03-31\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/milestones/{{milestoneId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "milestones", "{{milestoneId}}"]
+            },
+            "description": "Mesmo padrão do PUT de Project: status preservado (continua PENDENTE)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"status preservado\", () => pm.expect(json.status).to.eql(\"PENDENTE\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Manual] Marcar milestone como CONCLUIDA (H2 console)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/h2-console",
+              "host": ["{{baseUrl}}"],
+              "path": ["h2-console"]
+            },
+            "description": "Não existe endpoint de mudança de status pra Milestone ainda (mesma lacuna documentada no Exercício 3 da Semana 3). Antes de rodar as duas próximas requests, abra o H2 console (JDBC URL jdbc:h2:file:./data/projectmgt, usuário sa, senha em branco) e rode:\n\nUPDATE MILESTONE SET STATUS = 'CONCLUIDA' WHERE ID = <milestoneId>;\n\nSubstitua <milestoneId> pelo valor atual de {{milestoneId}} (veja em Collection Variables)."
+          },
+          "event": []
+        },
+        {
+          "name": "Atualizar milestone CONCLUIDA (409) [Exercício 3]",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{projectId}},\n  \"name\": \"Tentando editar uma milestone concluída\",\n  \"dueDate\": \"2026-04-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/milestones/{{milestoneId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "milestones", "{{milestoneId}}"]
+            },
+            "description": "Só passa depois do Exercício 3 (MilestoneAlreadyCompletedException) E depois de rodar o UPDATE manual no H2 console (request anterior)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409 Conflict\", () => pm.response.to.have.status(409));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"corpo no formato ErrorResponse\", () => pm.expect(json).to.have.property(\"status\", 409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Remover milestone CONCLUIDA (409) [Exercício 3]",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/milestones/{{milestoneId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "milestones", "{{milestoneId}}"]
+            },
+            "description": "Mesma trava do request anterior, agora no DELETE."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409 Conflict\", () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Remover milestone",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/milestones/{{milestoneId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "milestones", "{{milestoneId}}"]
+            },
+            "description": "Limpeza final. Se a milestone estiver CONCLUIDA (por causa dos testes do Exercício 3), esta request também vai dar 409 - nesse caso, volte no H2 console e mude o status antes de remover, ou remova a linha direto no console."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 204 ou 409 (se ficou CONCLUIDA nos testes anteriores)\", () => {",
+                  "    pm.expect([204, 409]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Remover projeto (limpeza)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/{{projectId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects", "{{projectId}}"]
+            },
+            "description": "Remove o projeto criado só pra esta pasta."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 204 No Content\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

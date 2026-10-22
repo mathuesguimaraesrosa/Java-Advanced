@@ -1,0 +1,506 @@
+{
+  "info": {
+    "_postman_id": "d1a9c7e4-6f2b-4a8d-9c3e-projectmgt-semana06",
+    "name": "ProjectMGT - Semana 6 (Relacionamentos)",
+    "description": "Coleção de testes da Semana 6 (1:1, 1:N, N:M - cascade, fetch, endpoints aninhados) - ver .planoAula/semana-06.md e materialDidatico/semana-06.md.\n\nIMPORTANTE: esta coleção testa o comportamento-alvo descrito no material - assume que Milestone.project e Task.milestone já são @ManyToOne de verdade (não mais Long soltos), que Task já é entidade JPA com Task.tags (@ManyToMany), que TagController e os endpoints aninhados (POST /api/milestones/{id}/tasks, POST/DELETE /api/tasks/{id}/tags/{tagId}, GET/PUT/DELETE /api/projects/{id}/detail) já existem, e que os Exercícios 1 e 2 (filtro ?done= e DELETE do detail) foram feitos.\n\nHoje (nesta sessão) só os models/repositories/services de Tag e ProjectDetail foram pré-criados, sem controllers/DTOs ainda, e Milestone/Task ainda não foram convertidos pra usar as relações de verdade - rodar esta coleção agora vai falhar na maior parte das pastas até a live coding da Semana 6 acontecer.\n\nVariáveis: baseUrl, projectId/milestoneId/taskId/tagId1/tagId2 (preenchidas automaticamente pelos testes de criação), nonExistentId.\n\nOrdem sugerida (Collection Runner): as pastas de cima pra baixo, na ordem em que aparecem.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080", "type": "string" },
+    { "key": "projectId", "value": "", "type": "string" },
+    { "key": "milestoneId", "value": "", "type": "string" },
+    { "key": "taskId", "value": "", "type": "string" },
+    { "key": "tagId1", "value": "", "type": "string" },
+    { "key": "tagId2", "value": "", "type": "string" },
+    { "key": "nonExistentId", "value": "999999", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "1. Project -> Milestone (1:N)",
+      "item": [
+        {
+          "name": "Criar projeto",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Portal do cliente\",\n  \"description\": \"Novo portal self-service\",\n  \"startDate\": \"2026-02-01\",\n  \"endDate\": \"2026-08-30\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/projects", "host": ["{{baseUrl}}"], "path": ["api", "projects"] },
+            "description": "Guarda o id criado em {{projectId}} - todas as outras pastas dependem dele."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 201 Created\", () => pm.response.to.have.status(201));",
+            "const json = pm.response.json();",
+            "pm.collectionVariables.set(\"projectId\", json.id);"
+          ] } }]
+        },
+        {
+          "name": "Criar milestone com projectId inexistente (404)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{nonExistentId}},\n  \"name\": \"Milestone órfã\",\n  \"dueDate\": \"2026-03-15\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/milestones", "host": ["{{baseUrl}}"], "path": ["api", "milestones"] },
+            "description": "Antes da Semana 6, isso 'funcionava' (projectId era só um Long solto, sem checagem). Depois de Milestone.project virar @ManyToOne de verdade, o service busca o Project e lança ResourceNotFoundException."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 404 Not Found\", () => pm.response.to.have.status(404));"
+          ] } }]
+        },
+        {
+          "name": "Criar milestone válida",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{projectId}},\n  \"name\": \"Entrega da fase 1\",\n  \"dueDate\": \"2026-04-15\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/milestones", "host": ["{{baseUrl}}"], "path": ["api", "milestones"] },
+            "description": "Guarda o id criado em {{milestoneId}}."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 201 Created\", () => pm.response.to.have.status(201));",
+            "const json = pm.response.json();",
+            "pm.test(\"status inicial é PENDENTE\", () => pm.expect(json.status).to.eql(\"PENDENTE\"));",
+            "pm.test(\"projectId bate com o projeto criado\", () => pm.expect(String(json.projectId)).to.eql(pm.collectionVariables.get(\"projectId\")));",
+            "pm.collectionVariables.set(\"milestoneId\", json.id);"
+          ] } }]
+        },
+        {
+          "name": "Listar milestones do projeto",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/milestones?projectId={{projectId}}&page=0&sizePage=10",
+              "host": ["{{baseUrl}}"], "path": ["api", "milestones"],
+              "query": [
+                { "key": "projectId", "value": "{{projectId}}" },
+                { "key": "page", "value": "0" },
+                { "key": "sizePage", "value": "10" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "pm.test(\"contém a milestone criada\", () => {",
+            "    const ids = json.content.map(m => String(m.id));",
+            "    pm.expect(ids).to.include(pm.collectionVariables.get(\"milestoneId\"));",
+            "});"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "2. Milestone -> Task (1:N, endpoint aninhado)",
+      "item": [
+        {
+          "name": "Criar task aninhada na milestone",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Escrever testes de integração\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/milestones/{{milestoneId}}/tasks",
+              "host": ["{{baseUrl}}"], "path": ["api", "milestones", "{{milestoneId}}", "tasks"]
+            },
+            "description": "milestoneId vem da URL, não do corpo - TaskRequest não tem esse campo. Guarda o id criado em {{taskId}}."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 201 Created\", () => pm.response.to.have.status(201));",
+            "const json = pm.response.json();",
+            "pm.test(\"milestoneId bate\", () => pm.expect(String(json.milestoneId)).to.eql(pm.collectionVariables.get(\"milestoneId\")));",
+            "pm.test(\"done começa false\", () => pm.expect(json.done).to.eql(false));",
+            "pm.test(\"tags começa vazio\", () => pm.expect(json.tags).to.eql([]));",
+            "pm.collectionVariables.set(\"taskId\", json.id);"
+          ] } }]
+        },
+        {
+          "name": "Criar task com milestoneId de path inexistente (404)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Task órfã\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/milestones/{{nonExistentId}}/tasks",
+              "host": ["{{baseUrl}}"], "path": ["api", "milestones", "{{nonExistentId}}", "tasks"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 404 Not Found\", () => pm.response.to.have.status(404));"
+          ] } }]
+        },
+        {
+          "name": "Listar tasks da milestone (paginado)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/milestones/{{milestoneId}}/tasks?page=0&sizePage=10",
+              "host": ["{{baseUrl}}"], "path": ["api", "milestones", "{{milestoneId}}", "tasks"],
+              "query": [{ "key": "page", "value": "0" }, { "key": "sizePage", "value": "10" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "pm.test(\"contém a task criada\", () => {",
+            "    const ids = json.content.map(t => String(t.id));",
+            "    pm.expect(ids).to.include(pm.collectionVariables.get(\"taskId\"));",
+            "});"
+          ] } }]
+        },
+        {
+          "name": "[Exercício 1] Filtrar tasks concluídas (done=true)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/milestones/{{milestoneId}}/tasks?done=true&page=0&sizePage=10",
+              "host": ["{{baseUrl}}"], "path": ["api", "milestones", "{{milestoneId}}", "tasks"],
+              "query": [{ "key": "done", "value": "true" }, { "key": "page", "value": "0" }, { "key": "sizePage", "value": "10" }]
+            },
+            "description": "Antes de rodar, marque a task como concluída (request seguinte) - senão a lista vem vazia, o que também é um resultado válido pra conferir."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "pm.test(\"todo item retornado está done=true\", () => {",
+            "    json.content.forEach(t => pm.expect(t.done).to.eql(true));",
+            "});"
+          ] } }]
+        },
+        {
+          "name": "Buscar task por id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/tasks/{{taskId}}", "host": ["{{baseUrl}}"], "path": ["api", "tasks", "{{taskId}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));"
+          ] } }]
+        },
+        {
+          "name": "Marcar task como concluída",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/tasks/{{taskId}}/done", "host": ["{{baseUrl}}"], "path": ["api", "tasks", "{{taskId}}", "done"] },
+            "description": "Rode antes do teste de filtro done=true acima, se quiser ver a lista não-vazia."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "pm.test(\"done agora é true\", () => pm.expect(json.done).to.eql(true));"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "3. Task <-> Tag (N:M)",
+      "item": [
+        {
+          "name": "Criar tag 1 (Backend)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Backend\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/tags", "host": ["{{baseUrl}}"], "path": ["api", "tags"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 201 Created\", () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set(\"tagId1\", pm.response.json().id);"
+          ] } }]
+        },
+        {
+          "name": "Criar tag 2 (Urgente)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Urgente\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/tags", "host": ["{{baseUrl}}"], "path": ["api", "tags"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 201 Created\", () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set(\"tagId2\", pm.response.json().id);"
+          ] } }]
+        },
+        {
+          "name": "Listar tags",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/tags", "host": ["{{baseUrl}}"], "path": ["api", "tags"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "pm.test(\"corpo é uma lista com as 2 tags\", () => {",
+            "    const ids = json.map(t => String(t.id));",
+            "    pm.expect(ids).to.include(pm.collectionVariables.get(\"tagId1\"));",
+            "    pm.expect(ids).to.include(pm.collectionVariables.get(\"tagId2\"));",
+            "});"
+          ] } }]
+        },
+        {
+          "name": "Associar tag 1 à task",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks/{{taskId}}/tags/{{tagId1}}",
+              "host": ["{{baseUrl}}"], "path": ["api", "tasks", "{{taskId}}", "tags", "{{tagId1}}"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "pm.test(\"tags tem 1 item\", () => pm.expect(json.tags).to.have.lengthOf(1));"
+          ] } }]
+        },
+        {
+          "name": "Associar tag 2 à task",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks/{{taskId}}/tags/{{tagId2}}",
+              "host": ["{{baseUrl}}"], "path": ["api", "tasks", "{{taskId}}", "tags", "{{tagId2}}"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "pm.test(\"tags agora tem 2 itens\", () => pm.expect(json.tags).to.have.lengthOf(2));"
+          ] } }]
+        },
+        {
+          "name": "Associar tag inexistente à task (404)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks/{{taskId}}/tags/{{nonExistentId}}",
+              "host": ["{{baseUrl}}"], "path": ["api", "tasks", "{{taskId}}", "tags", "{{nonExistentId}}"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 404 Not Found\", () => pm.response.to.have.status(404));"
+          ] } }]
+        },
+        {
+          "name": "Remover tag 1 da task",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks/{{taskId}}/tags/{{tagId1}}",
+              "host": ["{{baseUrl}}"], "path": ["api", "tasks", "{{taskId}}", "tags", "{{tagId1}}"]
+            },
+            "description": "Confirma no H2 console depois: a Tag 'Backend' continua existindo na tabela TAG, só a linha em task_tag some."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "pm.test(\"tags voltou a ter 1 item\", () => pm.expect(json.tags).to.have.lengthOf(1));",
+            "pm.test(\"a tag restante é a tag 2\", () => {",
+            "    const ids = json.tags.map(t => String(t.id));",
+            "    pm.expect(ids).to.include(pm.collectionVariables.get(\"tagId2\"));",
+            "});"
+          ] } }]
+        },
+        {
+          "name": "Confirmar que a tag removida ainda existe (GET /api/tags)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/tags", "host": ["{{baseUrl}}"], "path": ["api", "tags"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "pm.test(\"tag 1 continua na lista geral (não foi apagada, só desassociada)\", () => {",
+            "    const ids = json.map(t => String(t.id));",
+            "    pm.expect(ids).to.include(pm.collectionVariables.get(\"tagId1\"));",
+            "});"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "4. Project <-> ProjectDetail (1:1)",
+      "item": [
+        {
+          "name": "Buscar detail antes de criar (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/{{projectId}}/detail",
+              "host": ["{{baseUrl}}"], "path": ["api", "projects", "{{projectId}}", "detail"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 404 Not Found\", () => pm.response.to.have.status(404));"
+          ] } }]
+        },
+        {
+          "name": "Criar detail (PUT upsert)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"budget\": 50000,\n  \"client\": \"Acme Corp\",\n  \"notes\": \"Fase 1 do contrato\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/{{projectId}}/detail",
+              "host": ["{{baseUrl}}"], "path": ["api", "projects", "{{projectId}}", "detail"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "pm.test(\"projectId bate\", () => pm.expect(String(json.projectId)).to.eql(pm.collectionVariables.get(\"projectId\")));",
+            "pm.test(\"budget salvo\", () => pm.expect(json.budget).to.eql(50000));"
+          ] } }]
+        },
+        {
+          "name": "Atualizar detail (mesmo PUT, budget diferente)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"budget\": 75000,\n  \"client\": \"Acme Corp\",\n  \"notes\": \"Fase 1 + aditivo\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/{{projectId}}/detail",
+              "host": ["{{baseUrl}}"], "path": ["api", "projects", "{{projectId}}", "detail"]
+            },
+            "description": "Confirme no H2 console que continua existindo só UMA linha em PROJECT_DETAIL pra esse projectId (upsert, não duplicou)."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "pm.test(\"budget atualizado\", () => pm.expect(json.budget).to.eql(75000));"
+          ] } }]
+        },
+        {
+          "name": "Buscar detail depois de criado",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/{{projectId}}/detail",
+              "host": ["{{baseUrl}}"], "path": ["api", "projects", "{{projectId}}", "detail"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "pm.test(\"budget é o da última atualização\", () => pm.expect(json.budget).to.eql(75000));"
+          ] } }]
+        },
+        {
+          "name": "[Exercício 2] Remover detail",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/{{projectId}}/detail",
+              "host": ["{{baseUrl}}"], "path": ["api", "projects", "{{projectId}}", "detail"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 204 No Content\", () => pm.response.to.have.status(204));"
+          ] } }]
+        },
+        {
+          "name": "[Exercício 2] Confirmar 404 depois de remover",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/{{projectId}}/detail",
+              "host": ["{{baseUrl}}"], "path": ["api", "projects", "{{projectId}}", "detail"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 404 Not Found\", () => pm.response.to.have.status(404));"
+          ] } }]
+        },
+        {
+          "name": "Confirmar que o Project em si não foi afetado",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/projects/{{projectId}}", "host": ["{{baseUrl}}"], "path": ["api", "projects", "{{projectId}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 200 OK - o projeto continua existindo\", () => pm.response.to.have.status(200));"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "5. Limpeza",
+      "item": [
+        {
+          "name": "Remover task",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/tasks/{{taskId}}", "host": ["{{baseUrl}}"], "path": ["api", "tasks", "{{taskId}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 204 No Content\", () => pm.response.to.have.status(204));"
+          ] } }]
+        },
+        {
+          "name": "Remover tags",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/tags/{{tagId1}}", "host": ["{{baseUrl}}"], "path": ["api", "tags", "{{tagId1}}"] },
+            "description": "Rode uma vez pra cada tag ({{tagId1}} e depois troque manualmente por {{tagId2}}, ou duplique esta request)."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 204 No Content\", () => pm.response.to.have.status(204));"
+          ] } }]
+        },
+        {
+          "name": "Remover milestone",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/milestones/{{milestoneId}}", "host": ["{{baseUrl}}"], "path": ["api", "milestones", "{{milestoneId}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 204 No Content\", () => pm.response.to.have.status(204));"
+          ] } }]
+        },
+        {
+          "name": "Remover projeto",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/projects/{{projectId}}", "host": ["{{baseUrl}}"], "path": ["api", "projects", "{{projectId}}"] },
+            "description": "Como Project 1:N Milestone e 1:1 ProjectDetail têm cascade=ALL/orphanRemoval=true, remover o projeto também remove qualquer milestone/detail que tenha sobrado - vale conferir no H2 console."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test(\"Status 204 No Content\", () => pm.response.to.have.status(204));"
+          ] } }]
+        }
+      ]
+    }
+  ]
+}

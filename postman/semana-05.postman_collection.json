@@ -1,0 +1,515 @@
+{
+  "info": {
+    "_postman_id": "c4d8b6f1-2a7e-4f3b-8d1c-projectmgt-semana05",
+    "name": "ProjectMGT - Semana 5 (Spring Validation)",
+    "description": "Coleção de testes da Semana 5 (Bean Validation, MethodArgumentNotValidException, ConstraintViolationException, constraint customizada) - ver .planoAula/semana-05.md e materialDidatico/semana-05.md.\n\nIMPORTANTE: esta coleção testa o comportamento-alvo descrito no material - assume que ProjectRequest já está anotado com @NotBlank/@Size + @ValidDateRange, que @Valid está nos endpoints POST/PUT, que @Validated + @Positive estão nos @PathVariable de id, e que o GlobalExceptionHandler já tem os handlers de MethodArgumentNotValidException e ConstraintViolationException. As requests de Milestone assumem os Exercícios 1-3 da Semana 5 feitos (MilestoneRequest anotado, @Validated no MilestoneController, @MaxYearsInFuture em dueDate). Se algum desses passos ainda não foi implementado, as respectivas requests falham nos testes.\n\nVariáveis: baseUrl, projectId e milestoneId (preenchidas automaticamente pelos testes de criação), nonExistentId.\n\nOrdem sugerida (Collection Runner): pasta \"Project\" de cima pra baixo, depois \"Milestone\".",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080", "type": "string" },
+    { "key": "projectId", "value": "", "type": "string" },
+    { "key": "milestoneId", "value": "", "type": "string" },
+    { "key": "nonExistentId", "value": "999999", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Project",
+      "item": [
+        {
+          "name": "Criar projeto válido",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Portal do cliente\",\n  \"description\": \"Novo portal self-service\",\n  \"startDate\": \"2026-02-01\",\n  \"endDate\": \"2026-08-30\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects"]
+            },
+            "description": "Confirma que @Valid não quebra o fluxo de sucesso. Guarda o id criado em {{projectId}}."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201 Created\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"status inicial é PLANEJADO\", () => pm.expect(json.status).to.eql(\"PLANEJADO\"));",
+                  "pm.collectionVariables.set(\"projectId\", json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Criar projeto - name em branco (ValidationErrorResponse)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"sem nome\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-02-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects"]
+            },
+            "description": "@NotBlank em name, capturado por MethodArgumentNotValidException -> ValidationErrorResponse com 1 item de campo."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 Bad Request\", () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"corpo no formato ValidationErrorResponse\", () => {",
+                  "    pm.expect(json).to.have.property(\"status\", 400);",
+                  "    pm.expect(json).to.have.property(\"errors\");",
+                  "    pm.expect(json.errors).to.be.an(\"array\");",
+                  "});",
+                  "pm.test(\"errors tem um item pra name\", () => {",
+                  "    const fields = json.errors.map(e => e.field);",
+                  "    pm.expect(fields).to.include(\"name\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Criar projeto - name muito longo (Size)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{$randomLoremParagraphs}}\",\n  \"description\": \"teste de tamanho\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-02-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects"]
+            },
+            "description": "@Size(max = 150) em name - o gerador de lorem do Postman normalmente produz bem mais que 150 caracteres."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 Bad Request\", () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"errors tem um item pra name\", () => {",
+                  "    const fields = (json.errors || []).map(e => e.field);",
+                  "    pm.expect(fields).to.include(\"name\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Criar projeto - datas invertidas (erro global)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Projeto com datas invertidas\",\n  \"description\": \"teste\",\n  \"startDate\": \"2026-06-01\",\n  \"endDate\": \"2026-01-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects"]
+            },
+            "description": "@ValidDateRange (constraint customizada de classe) - o erro cai em getGlobalErrors(), não em getFieldErrors() (seção 1.6/1.9 do material)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 Bad Request\", () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"errors tem exatamente 1 item (erro global)\", () => {",
+                  "    pm.expect(json.errors).to.have.lengthOf(1);",
+                  "});",
+                  "pm.test(\"mensagem menciona endDate/startDate\", () => {",
+                  "    pm.expect(json.errors[0].message.toLowerCase()).to.satisfy(m => m.includes(\"enddate\") || m.includes(\"startdate\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Criar projeto - name em branco E datas invertidas (2 erros)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"teste\",\n  \"startDate\": \"2026-06-01\",\n  \"endDate\": \"2026-01-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects"]
+            },
+            "description": "Prova que a validação de campo (@NotBlank) e a constraint customizada de classe (@ValidDateRange) rodam juntas, na mesma passada do @Valid - errors deve ter 2 itens."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 Bad Request\", () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"errors tem 2 itens\", () => {",
+                  "    pm.expect(json.errors).to.have.lengthOf(2);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Buscar projeto por id inválido (-1)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/-1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects", "-1"]
+            },
+            "description": "@Positive no @PathVariable id + @Validated na classe -> ConstraintViolationException, capturado como ErrorCustomResponse (mensagem única), NÃO ValidationErrorResponse."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 Bad Request\", () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"corpo no formato ErrorCustomResponse (mensagem única, sem 'errors')\", () => {",
+                  "    pm.expect(json).to.have.property(\"message\");",
+                  "    pm.expect(json).to.not.have.property(\"errors\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Buscar projeto por id inexistente, mas válido (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/{{nonExistentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects", "{{nonExistentId}}"]
+            },
+            "description": "Contraste com a request anterior: id positivo (passa @Positive), mas não existe no banco -> ResourceNotFoundException (Semana 3), não ConstraintViolationException."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404 Not Found\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Atualizar projeto válido",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Portal do cliente v2\",\n  \"description\": \"Escopo revisado\",\n  \"startDate\": \"2026-02-15\",\n  \"endDate\": \"2026-09-30\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/{{projectId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects", "{{projectId}}"]
+            },
+            "description": "Confirma que @Valid também vale pro PUT, sem quebrar o fluxo normal."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"name atualizado\", () => pm.expect(json.name).to.eql(\"Portal do cliente v2\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Milestone (Exercícios 1-3)",
+      "item": [
+        {
+          "name": "Criar projeto (para as milestones)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Projeto para milestones\",\n  \"description\": \"Usado só pra popular projectId nesta pasta\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-12-31\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects"]
+            },
+            "description": "A pasta Project já deletou/alterou o projeto dela - esta request cria um novo, só pra dar um projectId válido pras milestones desta pasta."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201 Created\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set(\"projectId\", json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Criar milestone válida",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{projectId}},\n  \"name\": \"Entrega da fase 1\",\n  \"dueDate\": \"2026-03-15\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/milestones",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "milestones"]
+            },
+            "description": "Exercício 1: MilestoneRequest anotado com @NotNull/@NotBlank/@Size, e @Valid no controller."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201 Created\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"status inicial é PENDENTE\", () => pm.expect(json.status).to.eql(\"PENDENTE\"));",
+                  "pm.collectionVariables.set(\"milestoneId\", json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Criar milestone - name em branco (ValidationErrorResponse)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{projectId}},\n  \"name\": \"\",\n  \"dueDate\": \"2026-03-15\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/milestones",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "milestones"]
+            },
+            "description": "Exercício 1: @NotBlank em name."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 Bad Request\", () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"errors tem um item pra name\", () => {",
+                  "    const fields = (json.errors || []).map(e => e.field);",
+                  "    pm.expect(fields).to.include(\"name\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Criar milestone - projectId nulo (ValidationErrorResponse)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Milestone sem projeto\",\n  \"dueDate\": \"2026-03-15\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/milestones",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "milestones"]
+            },
+            "description": "Exercício 1: @NotNull em projectId."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 Bad Request\", () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"errors tem um item pra projectId\", () => {",
+                  "    const fields = (json.errors || []).map(e => e.field);",
+                  "    pm.expect(fields).to.include(\"projectId\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Criar milestone - dueDate 3 anos no futuro (@MaxYearsInFuture)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{projectId}},\n  \"name\": \"Milestone muito no futuro\",\n  \"dueDate\": \"{{$isoTimestamp}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/milestones",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "milestones"]
+            },
+            "description": "Exercício 3: @MaxYearsInFuture(2) em dueDate - constraint customizada de CAMPO (contraste com @ValidDateRange, que é de classe). Antes de rodar, edite o campo dueDate no body pra uma data uns 3 anos à frente de hoje (o {{$isoTimestamp}} do Postman gera a data/hora atual - substitua manualmente pelo ano futuro, ex: se hoje é 2026, use 2029-01-01)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 Bad Request\", () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"errors tem um item pra dueDate\", () => {",
+                  "    const fields = (json.errors || []).map(e => e.field);",
+                  "    pm.expect(fields).to.include(\"dueDate\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Buscar milestone por id inválido (-1)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/milestones/-1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "milestones", "-1"]
+            },
+            "description": "Exercício 2: @Positive + @Validated no MilestoneController -> ConstraintViolationException -> ErrorCustomResponse (reaproveita o handler global, criado em Project)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 Bad Request\", () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"corpo no formato ErrorCustomResponse\", () => {",
+                  "    pm.expect(json).to.have.property(\"message\");",
+                  "    pm.expect(json).to.not.have.property(\"errors\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Remover milestone (limpeza)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/milestones/{{milestoneId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "milestones", "{{milestoneId}}"]
+            },
+            "description": "Remove a milestone válida criada no início da pasta."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 204 No Content\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Remover projeto (limpeza)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/{{projectId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "projects", "{{projectId}}"]
+            },
+            "description": "Remove o projeto criado só pra esta pasta."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 204 No Content\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -20,6 +20,7 @@ import jakarta.validation.constraints.Positive;
 import org.springframework.data.domain.Page;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -73,6 +74,7 @@ public class MilestoneController {
     //            .map(ResponseEntity::ok)
     //                .orElseGet(() -> ResponseEntity.notFound().build());
 
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     @PostMapping
     public ResponseEntity<MilestoneResponse> create(@RequestBody @Valid MilestoneRequest request) {
         Milestone milestone = new Milestone();
@@ -86,6 +88,7 @@ public class MilestoneController {
                 .body(MilestoneMapper.toResponse(created));
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     @PutMapping("/{id}")
     public ResponseEntity<MilestoneResponse> update(@PathVariable @Positive Long id, @RequestBody @Valid MilestoneRequest request) {
         Milestone milestone = milestoneService.findById(id); // lança ResourceNotFoundException se não existir
@@ -106,6 +109,7 @@ public class MilestoneController {
         return PageResponse.from(taskService.findByMilestoneId(milestoneId, page, sizePage).map(TaskMapper::toResponse));
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     @PostMapping("/{milestoneId}/tasks")
     public ResponseEntity<TaskResponse> createTask(@PathVariable @Positive Long milestoneId,
                                                    @RequestBody @Valid TaskRequest request) {
@@ -119,6 +123,7 @@ public class MilestoneController {
                 .body(TaskMapper.toResponse(created));
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable @Positive Long id) {
         milestoneService.delete(id); // lança ResourceNotFoundException/MilestoneAlreadyCompletedException

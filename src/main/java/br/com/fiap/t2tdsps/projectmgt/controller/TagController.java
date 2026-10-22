@@ -8,6 +8,7 @@ import br.com.fiap.t2tdsps.projectmgt.service.TagService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,6 +31,7 @@ public class TagController {
         return tagService.findAll().stream().map(TagMapper::toResponse).toList();
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     @PostMapping
     public ResponseEntity<TagResponse> create(@RequestBody @Valid TagRequest request) {
         Tag tag = new Tag();
@@ -40,6 +42,7 @@ public class TagController {
                 .body(TagMapper.toResponse(created));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable @Positive Long id) {
         tagService.delete(id);

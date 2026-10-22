@@ -14,13 +14,11 @@ import org.springframework.stereotype.Service;
 public class CollaboratorServiceImpl implements CollaboratorService {
 
     private final CollaboratorRepository collaboratorRepository;
-//    private final PasswordEncoder passwordEncoder;
+    private final PasswordEncoder passwordEncoder;
 
-    public CollaboratorServiceImpl(CollaboratorRepository collaboratorRepository
-           // , PasswordEncoder passwordEncoder
-    ) {
+    public CollaboratorServiceImpl(CollaboratorRepository collaboratorRepository, PasswordEncoder passwordEncoder) {
         this.collaboratorRepository = collaboratorRepository;
-//        this.passwordEncoder = passwordEncoder;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -31,7 +29,7 @@ public class CollaboratorServiceImpl implements CollaboratorService {
         Collaborator collaborator = new Collaborator();
         collaborator.setName(name);
         collaborator.setEmail(email);
-//        collaborator.setPassword(passwordEncoder.encode(rawPassword)); // BCrypt: só o hash vai para o banco
+        collaborator.setPassword(passwordEncoder.encode(rawPassword)); // BCrypt: só o hash vai para o banco
         collaborator.setRole(Role.MEMBER); // todo cadastro público nasce MEMBER
         return collaboratorRepository.save(collaborator);
     }
